@@ -40,6 +40,8 @@ VBA マクロを一切記述することなく、 **標準の `.xlsx`（マク�
    * 初期設定スクリプトや複数行のコマンドリストファイルを読み込み、行単位でウェイトまたはプロンプト待機を挟みながら順次一括送信。
 5. **Excel 32bit / 64bit 完全動作マトリクス**
    * .NET Framework 標準のマネージド通信基盤（`System.IO.Ports`）を採用しており、外部の専用ネイティブ DLL に依存しないため、Excel 32bit 版および 64bit 版の双方で制限なく完全動作。
+6. **実機・ドライバ不要の仮想 COM 折り返しテスト ＆ 通信モニター連携（`c2c` 対応）**
+   * 公式無償ツール **[c2c](https://github.com/Monaca-App/c2c)** を起動するだけで、カーネルドライバ導入や管理者権限なしに仮想 COM ポートペア（例: `COM10` ⇔ `COM11`）や TCP ブリッジを利用でき、送受信電文をリアルタイム監視・CSV 保存しながら事前開発を行えます。
 
 ---
 
@@ -66,7 +68,7 @@ VBA マクロを一切記述することなく、 **標準の `.xlsx`（マク�
 | **対応 Excel** | Microsoft Excel 2016 / 2019 / 2021 / Microsoft 365 (デスクトップ版 32bit / 64bit) |
 | **必須アドイン** | [TermAddIn](https://github.com/Monaca-App/TermAddIn) (Excel VSTO アドイン) |
 | **ランタイム** | .NET Framework 4.8 / Visual Studio 2010 Tools for Office Runtime |
-| **インターフェース** | RS-232C, RS-422, RS-485, USB 仮想 COM ポート |
+| **インターフェース** | RS-232C, RS-422, RS-485, USB 仮想 COM ポート, [c2c](https://github.com/Monaca-App/c2c) 仮想ヌルモデムポート |
 
 ---
 
@@ -117,5 +119,6 @@ Excel シート上での典型的なシリアル通信・対話シーケンス�
 
 * **開発元**: [Monaca アプリ工房 (Monaca App Store)](https://github.com/Monaca-App/store)
 * **親プロジェクト**: [TermAddIn](https://github.com/Monaca-App/TermAddIn)
+* **関連コンパニオンツール**: [c2c - ドライバ不要の仮想ヌルモデム＆通信モニター](https://github.com/Monaca-App/c2c)
 * **Copyright**: Copyright (C) Monaca App Store 2026 All rights reserved.
 * **お問い合わせ**: 不具合報告や機能要望は、GitHub の Issue までお気軽にお寄せください。
