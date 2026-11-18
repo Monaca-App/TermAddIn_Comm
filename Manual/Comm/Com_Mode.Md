@@ -1,7 +1,5 @@
 ﻿# コマンドリファレンス：Com_Mode
 
----
-
 ## 概要
 
 **Com_Mode** は、COM ポート（UART）の通信プロパティ（ボーレート・パリティ・データビット・ストップビット）、フロー制御（ハンドシェイク）、送信デリミタ（`TXCR` / `TXCRLF` / `NON`）、および受信データモード（`ASCII` / `BIN`）を一括または個別に設定する統合モード制御コマンドです。
@@ -15,7 +13,7 @@
 ### コマンド構文
 
 ```csv
-,SEQUENCE,Com_Mode, "[CommProperty]", "[Handshake]", "[TxDelimiter]", "[DataMode]"
+,SEQUENCE, [ステップキー], Com_Mode, "[CommProperty]", "[Handshake]", "[TxDelimiter]", "[DataMode]"
 ```
 
 ### パラメータ（引数）一覧
@@ -31,15 +29,12 @@
 
 ## 🔄 特殊置換規約・分岐規約の適用
 
-1. **カンマを含む第1引数の保護**:
-   - `"115200,E,8,1"` のようにカンマを含む通信条件文字列は、必ずダブルクォーテーション `""` で囲んで記述します。
-2. **部分更新（省略または空文字 `""` の維持仕様）**:
-   - 変更したい項目のみを指定し、他の引数を省略または `""` とすることで、既存の通信設定を壊さずに特定のモード（送信デリミタのみ等）だけを動的に切り替えられます。
-3. **レガシー別名互換**:
-   - 旧表記の `Term_CommProperty`、`Term_Handshake`、`Term_TxCr`、`Term_TxCrLf`、`Term_Mode` は内部正規化により本コマンドへ統合処理されます。
-4. **DataMode (`ASCII` / `BIN`) と SPI フィルタリング動作**:
-   - **`ASCII` モード**: 受信バイトストリームをリングバッファへ投入する際、ヌルバイト（`0x00`）および未通信・アイドリングバイト（`0xFF`）を自動的に除外（SPI フィルタ）します。SPI バスや UART 経由で発生する無効ダミー文字を排除し、純粋なテキスト文字列のみを行バッファへ蓄積して解析できるようにします。
-   - **`BIN` モード**: フィルタリングを行わず、受信した全バイト（`0x00` や `0xFF` を含む）をそのまま生バイナリデータとして透過的にリングバッファへ蓄積します。バイナリ通信やパケット送受信を行う場合に指定します。
+本コマンドの引数における特殊記法および解釈ルールです。
+* **動的置換（`$`）**: 引数内で `$PARAMキー$` のように記述すると、実行時に変数プール（PARAM）の値へ動的置換されます。（適用可能な引数: 全引数対応）
+* **ジャンプ先指定（`#`）**: 本コマンドはジャンプ制御を行わないため適用されません。（適用可能な引数: 非適用）
+* **共通コマンド指定（`@`）**: 本コマンドは外部マクロを呼び出さないため、共通コマンド呼び出し記法は適用されません。（適用可能な引数: 非適用）
+* **カンマのエスケープ**: 通信条件文字列（例: `"9600,E,7,1"`）や複数データのカンマ区切り値を単一引数として渡す場合は、必ず `"..."` と二重引用符で囲んで記述します。
+* **エイリアス（別名）**: `Port`, `Term_Port`, `Property`, `Term_Propaty`, `Handshake`, `Term_Handshak`, `TXCR`, `TXCRLF`, `SPI_On`, `ComAscii`, `SPI_Off`, `ComBin`, `Select_Com_Mode`
 
 ---
 
@@ -47,26 +42,26 @@
 
 ### スクリプト記述例
 
+※COMMAND ブロック配下の子要素行（PARAM, SEQUENCE）は必ず行頭カンマから開始し、スペースインデントや行末コメント（`;`）は記述しないでください。
+
 ```csv
+COMMAND, "SAMPLE_COM_MODE", ""
 ; 1. 全パラメータの一括初期設定（115200bps, Parity None, 8bit, Stop 1, RTS/CTS, CRLF, ASCII）
-,SEQUENCE,Com_Mode, "115200,N,8,1", "RTSCTS", "TXCRLF", "ASCII"
-,SEQUENCE,Com_Open
-
+,SEQUENCE, 010, Com_Mode, "115200,N,8,1", "RTSCTS", "TXCRLF", "ASCII"
+,SEQUENCE, 020, Com_Open
 ; 2. 通信中に送信デリミタのみを CR に変更（他は空文字で現在値維持）
-,SEQUENCE,Com_Mode, "", "", "TXCR", ""
-,SEQUENCE,Com_Send, "ATZ"
-
+,SEQUENCE, 030, Com_Mode, "", "", "TXCR", ""
+,SEQUENCE, 040, Com_Send, "ATZ"
 ; 3. バイナリデータ受信のために受信モードを BIN、デリミタを NON に変更
-,SEQUENCE,Com_Mode, "", "", "NON", "BIN"
-,SEQUENCE,Com_Close
-,SEQUENCE,Exit
+,SEQUENCE, 050, Com_Mode, "", "", "NON", "BIN"
+,SEQUENCE, 060, Com_Close
+,SEQUENCE, 070, Exit
 ```
 
 ### 実行時の挙動・変数変化
 
-1. 1 回目の `Com_Mode` で UART 通信条件・フロー制御・改行コード・データモードが一括設定されます。
-2. 2 回目の `Com_Mode` ではボーレートやフロー制御を維持したまま、送信デリミタのみが `CR`（`\r`）に切り替わります。
-3. 3 回目の `Com_Mode` では送信デリミタなし（`NON`）・バイナリ受信モード（`BIN`）に切り替わります。
+* **実行前の状態**: Term 通信エンジンが初期化され、必要な通信パラメータおよび変数プール（`PARAM`）が準備されている状態。
+* **実行後の状態**: 1 回目の `Com_Mode` で UART 通信条件・フロー制御・改行コード・データモードが一括設定されます。 2 回目の `Com_Mode` ではボーレートやフロー制御を維持したまま、送信デリミタのみが `CR`（`\r`）に切り替わります。 3 回目の `Com_Mode` では送信デリミタなし（`NON`）・バイナリ受信モード（`BIN`）に切り替わります。
 
 ---
 
@@ -95,6 +90,12 @@ sequenceDiagram
         Cmd->>Buf: SetDataMode(ASCII / BIN)
     end
     Cmd-->>Script: 正常終了 (Next Step)
+    alt パラメータおよびプロトコル検証が正常な場合
+        Cmd-->>Script: 正常完了 (IsCommandGo = true)
+    else 引数範囲外または通信状態異常の場合
+        Cmd->>Cmd: エラーログ出力 (_log.LogError)
+        Cmd-->>Script: 安全停止 (SetErrorAndHalt)
+    end
 ```
 
 ---
@@ -110,15 +111,17 @@ sequenceDiagram
 
 ## 🧪 ユニットテスト仕様
 
+本コマンドクラス（`Com_ModeCommand.cs`）に実装されている `RunUnitTest()` メソッドが検証するユニットテストの仕様です。
+
 ### テスト実行前提条件
-- **対象クラス**: `TermAnalysis.Comm.Com_ModeCommand`（`Com_ModeCommand.cs`）
-- **モック環境**: `ISerialPortAdapter` モックおよび `TermRingBufferManager` が注入されていること。
+
+* **実行トリガー**: `RunUnitTest()` メソッドの呼び出し
+* **有効化条件**: システム全体の最小ログレベル（`ErrorLogger.MinimumLevel`）が `LogLevel.Test` であること（それ以外の場合は無効化ガードにより早期リターン）
+* **検証結果出力**: `_log.LogTest` によるログ出力。検証失敗時は `_log.LogError`、予期せぬ例外発生時は `_log.LogCritical` で記録し、`finally` ブロックで `ApplySetting` により `"Property"`=`"9600,N,8,1"`、`"Handshake"`=`"None"`、`"LineEnding"`=`"CR"`、`"SPI"`=`"Off"` へ初期状態を復元します。
 
 ### テストケース一覧
 
-| テストID | テスト観点 | 入力スクリプト | 期待される動作・検証項目 |
-| :--- | :--- | :--- | :--- |
-| `UT-COM-MODE-01` | 全項目一括設定 | `,SEQUENCE,Com_Mode, "9600,E,7,1", "XONXOFF", "TXCRLF", "ASCII"` | ボーレート 9600、偶数パリティ、7bit、Stop 1、XON/XOFF、CRLF、ASCII が正しく設定されること。 |
-| `UT-COM-MODE-02` | 部分更新（デリミタのみ） | `,SEQUENCE,Com_Mode, "", "", "TXCR", ""` | 既存のボーレート等を維持したまま、送信デリミタのみが `CR` に変更されること。 |
-| `UT-COM-MODE-03` | 異常系（書式不正） | `,SEQUENCE,Com_Mode, "INVALID_BAUD,N,8,1"` | `ArgumentException` が送出され、エラーログが出力されること。 |
-
+| No | テストカテゴリ | テスト条件（入力値） | 期待される結果（出力値） | 検証の目的 / 観点 |
+| :---: | :--- | :--- | :--- | :--- |
+| **1** | 正常系 | 引数 `"38400,O,7,2"`, `"RtsCts"`, `"TXCRLF"`, `"ASCII"` の 4 引数一括設定を指定して実行 | `!param.HasError` かつ `BaudRate == 38400`、`Parity == Parity.Odd`、`DataBits == 7`、`StopBits == StopBits.Two`、`Handshake == Handshake.RequestToSend`、`NewLine == "\r\n"`、`SpiMode == true` となる | 通信プロパティ・フロー制御・送信デリミタ・ASCII（SPI）モードの一括反映検証 |
+| **2** | 異常系 | 引数 5 個以上の過剰指定（`ValidateParamRange(0, 4)` 違反）または設定適用中の例外発生 | 引数範囲外エラーによる早期リターン、または `_log.LogCritical` 記録と `SetErrorAndHalt(-1, ex.Message)` による安全停止 | 引数個数境界ガードおよび設定変更例外時のフェイルセーフ検証 |

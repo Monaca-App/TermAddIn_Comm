@@ -1,0 +1,106 @@
+; ==============================================================================
+; Term Macro Script: COMポート シリアル対話通信制御 (RS-232C / UART)
+; 生成AI: Antigravity (Gemini 4 Carbon (Medium))
+; 対象システム: シリアル対話型機器（電子計測器・組込みマイコン基板・検査治具コントローラ等）
+; ==============================================================================
+TITLE, "COMポート シリアル対話通信制御"
+
+; ------------------------------------------------------------------------------
+; コマンド定義: PORT_OPEN (通信条件設定・COMポート接続)
+; ------------------------------------------------------------------------------
+COMMAND, "PORT_OPEN"
+,PARAM, PORT_NAME, Text, "COMポート(空欄時はUI設定)", ""
+,PARAM, BAUD, List, "ボーレート", "9600", "19200", "38400", "57600", "115200"
+,PARAM, PARITY, List, "パリティ", "N", "E", "O"
+,PARAM, DATA_BITS, List, "データ長", "8", "7"
+,PARAM, STOP_BITS, List, "ストップビット", "1", "2"
+,PARAM, FLOW_CTRL, List, "フロー制御", "NONE", "RTSCTS", "XONXOFF"
+,PARAM, TX_DELIM, List, "送信改行コード", "TXCRLF", "TXCR", "NON"
+,PARAM, DATA_MODE, List, "受信データモード", "ASCII", "BIN"
+,SEQUENCE, 10, Com_Mode, "$BAUD$,$PARITY$,$DATA_BITS$,$STOP_BITS$", "$FLOW_CTRL$", "$TX_DELIM$", "$DATA_MODE$"
+,SEQUENCE, 20, Com_Open, "$PORT_NAME$"
+,SEQUENCE, 30, Exit
+
+; ------------------------------------------------------------------------------
+; コマンド定義: DEV_INIT (機器初期確認・プロンプト同期)
+; ------------------------------------------------------------------------------
+COMMAND, "DEV_INIT", ON
+,PARAM, INIT_CMD, Text, "初期確認コマンド", "*IDN?"
+,PARAM, PROMPT_STR, Text, "応答プロンプト", ">"
+,PARAM, TIMEOUT_MS, Text, "待機タイムアウト(ms)", "5000"
+,PARAM, WAKE_CMD, Text, "再同期送出コマンド", ""
+,PARAM, ERR_STATUS, Work, "通信エラー状態", ""
+,SEQUENCE, 10, Com_Send, "$INIT_CMD$"
+,SEQUENCE, 20, Com_WaitPrompt, "$PROMPT_STR$", "$TIMEOUT_MS$", #RETRY_INIT#
+,SEQUENCE, 30, Set_Data, "ERR_STATUS", "COM_ERR_FLG"
+,SEQUENCE, 40, Judge, EQU, "$ERR_STATUS$", "CLR", #ERR_EXIT#
+,SEQUENCE, 50, Exit
+,SEQUENCE, #RETRY_INIT#, Com_Send, "$WAKE_CMD$"
+,SEQUENCE, 70, Com_WaitPrompt, "$PROMPT_STR$", "$TIMEOUT_MS$", #ERR_EXIT#
+,SEQUENCE, 80, Exit
+,SEQUENCE, #ERR_EXIT#, Exit
+
+; ------------------------------------------------------------------------------
+; コマンド定義: MEAS_READ (測定値読み出し・エコー除去抽出)
+; ------------------------------------------------------------------------------
+COMMAND, "MEAS_READ", "RESULT_DATA"
+,PARAM, QUERY_CMD, Text, "測定要求コマンド", "MEAS?"
+,PARAM, PROMPT_STR, Text, "応答プロンプト", ">"
+,PARAM, TIMEOUT_MS, Text, "待機タイムアウト(ms)", "5000"
+,PARAM, ECHO_SKIP, List, "エコー行スキップ数", "1", "0", "2"
+,PARAM, TARGET_LINE, Text, "抽出対象行番号", "1"
+,PARAM, RESULT_DATA, Range, "測定データ結果", ""
+,SEQUENCE, 10, Time_Stamp, "OFF"
+,SEQUENCE, 20, Com_Send, "$QUERY_CMD$"
+,SEQUENCE, 30, Com_WaitPrompt, "$PROMPT_STR$", "$TIMEOUT_MS$", #RETRY_MEAS#
+,SEQUENCE, #PARSE_DATA#, Judge, GT, "$ECHO_SKIP$", "0", #EXTRACT_LINE#
+,SEQUENCE, 50, Skip_Line, "$ECHO_SKIP$"
+,SEQUENCE, #EXTRACT_LINE#, Get_Line, "RESULT_DATA", "$TARGET_LINE$"
+,SEQUENCE, 70, Time_Stamp, "ON"
+,SEQUENCE, 80, Exit
+,SEQUENCE, #RETRY_MEAS#, Com_Send, "$QUERY_CMD$"
+,SEQUENCE, 100, Com_WaitPrompt, "$PROMPT_STR$", "$TIMEOUT_MS$", #TIMEOUT_ERR#
+,SEQUENCE, 110, Jump, #PARSE_DATA#
+,SEQUENCE, #TIMEOUT_ERR#, Set_Data, "RESULT_DATA", "ERROR_TIMEOUT"
+,SEQUENCE, 130, Time_Stamp, "ON"
+,SEQUENCE, 140, Exit
+
+; ------------------------------------------------------------------------------
+; コマンド定義: CMD_SEND (任意コマンド送信・全応答データ取得)
+; ------------------------------------------------------------------------------
+COMMAND, "CMD_SEND", "RESULT_DATA"
+,PARAM, SEND_TEXT, Text, "送信コマンド文字列", "STATUS"
+,PARAM, LINE_END, List, "行末改行指定", "CRLF", "CR", "LF", "NONE"
+,PARAM, PROMPT_STR, Text, "応答プロンプト", ">"
+,PARAM, TIMEOUT_MS, Text, "待機タイムアウト(ms)", "5000"
+,PARAM, RESULT_DATA, Range, "応答テキスト結果", ""
+,SEQUENCE, 10, Com_Send, "$SEND_TEXT$", "$LINE_END$"
+,SEQUENCE, 20, Com_WaitPrompt, "$PROMPT_STR$", "$TIMEOUT_MS$", #CMD_TIMEOUT#
+,SEQUENCE, 30, Set_Data, "RESULT_DATA"
+,SEQUENCE, 40, Exit
+,SEQUENCE, #CMD_TIMEOUT#, Set_Data, "RESULT_DATA", "ERROR_TIMEOUT"
+,SEQUENCE, 60, Exit
+
+; ------------------------------------------------------------------------------
+; コマンド定義: BATCH_SEND (外部設定ファイル一括送信)
+; ------------------------------------------------------------------------------
+COMMAND, "BATCH_SEND"
+,PARAM, FILE_PATH, Text, "送信ファイルパス", "./config/serial_init.txt"
+,PARAM, WAIT_MODE, List, "送信待機モード", "WaitPrompt", "NoWait"
+,PARAM, CLEAR_ERR, List, "送信前エラークリア", "true", "false"
+,PARAM, END_PROMPT, Text, "完了確認プロンプト", ">"
+,PARAM, TIMEOUT_MS, Text, "待機タイムアウト(ms)", "10000"
+,PARAM, ERR_STATUS, Work, "通信エラー状態", ""
+,SEQUENCE, 10, Com_SendFile, "$FILE_PATH$", "$WAIT_MODE$", "$CLEAR_ERR$"
+,SEQUENCE, 20, Com_WaitPrompt, "$END_PROMPT$", "$TIMEOUT_MS$", #BATCH_END#
+,SEQUENCE, 30, Set_Data, "ERR_STATUS", "COM_ERR_FLG"
+,SEQUENCE, 40, Judge, EQU, "$ERR_STATUS$", "CLR", #BATCH_END#
+,SEQUENCE, #BATCH_END#, Exit
+
+; ------------------------------------------------------------------------------
+; コマンド定義: PORT_CLOSE (COMポート切断・リソース解放)
+; ------------------------------------------------------------------------------
+COMMAND, "PORT_CLOSE"
+,SEQUENCE, 10, Com_Close
+,SEQUENCE, 20, Exit
+

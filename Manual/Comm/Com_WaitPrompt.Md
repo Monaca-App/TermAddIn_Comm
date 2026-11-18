@@ -1,7 +1,5 @@
 ﻿# コマンドリファレンス：Com_WaitPrompt
 
----
-
 ## 概要
 
 **Com_WaitPrompt** は、COM ポート（UART）の非同期受信リングバッファ（`TermRingBufferManager`）を監視し、指定されたプロンプト文字列（または応答キーワード）が受信されるまで待機するコマンドです。
@@ -16,7 +14,7 @@
 ### コマンド構文
 
 ```csv
-,SEQUENCE,Com_WaitPrompt, "<Prompt>", "[TimeoutMs: 10000]", "[JumpIfTimeout]"
+,SEQUENCE, [ステップキー], Com_WaitPrompt, "<Prompt>", "[TimeoutMs: 10000]", "[JumpIfTimeout]"
 ```
 
 ### パラメータ（引数）一覧
@@ -31,10 +29,12 @@
 
 ## 🔄 特殊置換規約・分岐規約の適用
 
-1. **変数展開（`$` / `@` / `#`）**:
-   - 第 1 引数のプロンプト文字列や第 2 引数のタイムアウト値には変数を使用できます（例: `"$EXPECTED_PROMPT"`, `"$TIMEOUT_MS"`）。
-2. **タイムアウト分岐規約**:
-   - 第 3 引数 `JumpIfTimeout` が指定されている場合、タイムアウト発生時に異常終了せず、指定されたラベルステップへプログラムカウンタ（PC）を遷移させます。
+本コマンドの引数における特殊記法および解釈ルールです。
+* **動的置換（`$`）**: 引数内で `$PARAMキー$` のように記述すると、実行時に変数プール（PARAM）の値へ動的置換されます。（適用可能な引数: 全引数対応）
+* **ジャンプ先指定（`#`）**: タイムアウト発生時の遷移先ラベルを `#ラベル名#` の形式で指定できます。（適用可能な引数: `JumpIfTimeout` 引数）
+* **共通コマンド指定（`@`）**: 本コマンドは外部マクロを呼び出さないため、共通コマンド呼び出し記法は適用されません。（適用可能な引数: 非適用）
+* **カンマのエスケープ**: 通信条件文字列（例: `"9600,E,7,1"`）や複数データのカンマ区切り値を単一引数として渡す場合は、必ず `"..."` と二重引用符で囲んで記述します。
+* **エイリアス（別名）**: `WaitPrompt`, `Term_WaitPrompt`, `Analysis_Term_WaitPrompt`, `WaitChar`, `Term_WaitChar`, `Analysis_Term_WaitChar`
 
 ---
 
@@ -42,31 +42,29 @@
 
 ### スクリプト記述例
 
+※COMMAND ブロック配下の子要素行（PARAM, SEQUENCE）は必ず行頭カンマから開始し、スペースインデントや行末コメント（`;`）は記述しないでください。
+
 ```csv
-,PARAM,RETRY_CNT,0
-
-,SEQUENCE,Com_Open
-:SEND_RETRY
-,SEQUENCE,Com_Send, "PING"
+COMMAND, "SAMPLE_COM_WAITPROMPT", ""
+,PARAM, "RETRY_CNT", Text, "RETRY_CNT", "0"
+,SEQUENCE, 010, Com_Open
+,SEQUENCE, #SEND_RETRY#, Com_Send, "PING"
 ; 3秒以内に "PONG" が返らなければ TIMEOUT_HANDLE ラベルへ分岐
-,SEQUENCE,Com_WaitPrompt, "PONG", "3000", "TIMEOUT_HANDLE"
-,SEQUENCE,Msg_Box, "通信成功：PONGを受信しました"
-,SEQUENCE,Com_Close
-,SEQUENCE,Exit
-
-:TIMEOUT_HANDLE
-,SEQUENCE,Param_Add, "$RETRY_CNT", "1", "$RETRY_CNT"
-,SEQUENCE,Judge, "$RETRY_CNT", "<", "3", "SEND_RETRY"
-,SEQUENCE,Msg_Box, "通信タイムアウト：リトライ上限に達しました"
-,SEQUENCE,Com_Close
-,SEQUENCE,Exit
+,SEQUENCE, 020, Com_WaitPrompt, "PONG", "3000", "TIMEOUT_HANDLE"
+,SEQUENCE, 030, Msg_Box, "通信成功：PONGを受信しました"
+,SEQUENCE, 040, Com_Close
+,SEQUENCE, 050, Exit
+,SEQUENCE, #TIMEOUT_HANDLE#, Param_Add, "$RETRY_CNT$", "1", "$RETRY_CNT$"
+,SEQUENCE, 060, Judge, "$RETRY_CNT$", "<", "3", "SEND_RETRY"
+,SEQUENCE, 070, Msg_Box, "通信タイムアウト：リトライ上限に達しました"
+,SEQUENCE, 080, Com_Close
+,SEQUENCE, 090, Exit
 ```
 
 ### 実行時の挙動・変数変化
 
-1. `"PING"` 送信後、`Com_WaitPrompt` は最大 3,000ms の間 `"PONG"` の到着を待機します。
-2. 3,000ms 以内に `"PONG"` が受信されれば次の `Msg_Box` へ進みます。
-3. タイムアウトした場合は `:TIMEOUT_HANDLE` へジャンプし、`$RETRY_CNT` を加算して最大 3 回まで再試行します。
+* **実行前の状態**: Term 通信エンジンが初期化され、必要な通信パラメータおよび変数プール（`PARAM`）が準備されている状態。
+* **実行後の状態**: `"PING"` 送信後、`Com_WaitPrompt` は最大 3,000ms の間 `"PONG"` の到着を待機します。 3,000ms 以内に `"PONG"` が受信されれば次の `Msg_Box` へ進みます。 タイムアウトした場合は `:TIMEOUT_HANDLE` へジャンプし、`$RETRY_CNT` を加算して最大 3 回まで再試行します。
 
 ---
 
@@ -107,15 +105,17 @@ sequenceDiagram
 
 ## 🧪 ユニットテスト仕様
 
+本コマンドクラス（`Com_WaitPromptCommand.cs`）に実装されている `RunUnitTest()` メソッドが検証するユニットテストの仕様です。
+
 ### テスト実行前提条件
-- **対象クラス**: `TermAnalysis.Comm.Com_WaitPromptCommand`（`Com_WaitPromptCommand.cs`）
-- **モック環境**: `TermRingBufferManager` に疑似受信データを非同期投入できるテストハーネスが構成されていること。
+
+* **実行トリガー**: `RunUnitTest()` メソッドの呼び出し
+* **有効化条件**: システム全体の最小ログレベル（`ErrorLogger.MinimumLevel`）が `LogLevel.Test` であること（それ以外の場合は無効化ガードにより早期リターン）
+* **検証結果出力**: `_log.LogTest` によるログ出力。検証失敗時は `_log.LogError`、予期せぬ例外発生時は `_log.LogCritical` で記録し、`finally` ブロックで `TermRingBufferManager.Instance.ClearBuffer()` および `UartTransportCore.Shared.IsLoopbackMode` の復元を実行します。
 
 ### テストケース一覧
 
-| テストID | テスト観点 | 入力スクリプト | 期待される動作・検証項目 |
-| :--- | :--- | :--- | :--- |
-| `UT-COM-WAIT-01` | 正常系（プロンプト検出） | `,SEQUENCE,Com_WaitPrompt, "READY>", "2000"` | バッファに `"READY>"` が到着した時点で即座に待機完了し次ステップへ進むこと。 |
-| `UT-COM-WAIT-02` | 正常系（タイムアウト分岐） | `,SEQUENCE,Com_WaitPrompt, "READY>", "100", "ERR_LBL"` | 100ms 経過後に例外で止まらず、遷移先が `"ERR_LBL"` に設定されること。 |
-| `UT-COM-WAIT-03` | 異常系（タイムアウト停止） | `,SEQUENCE,Com_WaitPrompt, "READY>", "100"` | 第 3 引数省略時に 100ms 経過すると `TimeoutException` が送出されること。 |
-
+| No | テストカテゴリ | テスト条件（入力値） | 期待される結果（出力値） | 検証の目的 / 観点 |
+| :---: | :--- | :--- | :--- | :--- |
+| **1** | 正常系 | `IsLoopbackMode = true` 環境下でプロンプト `"PROMPT_OK"`（`"READY>"`）と `"PROMPT_NG"`（`"ERROR#"`）を登録し、受信文字列 `"CMD ECHO\r\nOUTPUT LINE 1\r\nREADY>"` に対して `SearchPrompt` を `"PROMPT_OK"` / `"PROMPT_NG"` / `null` で実行 | `hitOk == true`、`hitNg == false`、`hitAny == true` が返却される | 登録プロンプト一致・不一致判定および任意登録プロンプト一括検索の検証 |
+| **2** | 異常系 | 空データ `SearchPrompt(string.Empty, testCmd, "PROMPT_OK")` および `null` 入力 `SearchPrompt(null, null, null)` を指定して実行 | 例外を発生させず `emptyHit == false` かつ `nullHit == false` を安全に返却する | 空バッファおよび `null` 入力に対する境界値防御・クラッシュ防止の検証 |
