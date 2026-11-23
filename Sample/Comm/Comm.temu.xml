@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<TermEmulatorProfile Version="1.0">
+  <Channel ChannelId="0" Enabled="true" Name="Sample Comm Device (COM10)" Mode="MonacaVirtualComHost" ProtocolKey="" ShareGlobalMemory="true">
+    <EndpointA PortName="COM10" BaudRate="9600" DataBits="8" Parity="None" StopBits="One" Handshake="None" ListenAddress="127.0.0.1" Port="5020" PipeName="TermEmulatorPipe0" />
+    <EndpointB TargetHost="127.0.0.1" TargetPort="5021" TargetPortName="COM11" TargetBaudRate="9600" />
+    <Framing DelimiterMode="CrLf" IdleTimeoutMs="20" FixedFrameLength="8" CustomDelimiterHex="0D 0A" EncodingName="ASCII" DefaultTerminator="\r\n" DefaultChecksum="None" />
+    <ProtocolOptions />
+    <Rules>
+      <Rule RuleId="r001" Enabled="true" Name="IDN Query" Priority="10" PatternType="ExactAscii" MatchPattern="*IDN?" CaseSensitive="false" ReplyPayload="MONACA,COMM-SAMPLE-SIM,SN0001,1.0.0\r\n&gt;" ReplyIsHex="false" ResponseDelayMs="5" AppendChecksum="None" AppendTerminator="true" MemoryWriteExpression="" />
+      <Rule RuleId="r002" Enabled="true" Name="Measurement Query" Priority="20" PatternType="ExactAscii" MatchPattern="MEAS?" CaseSensitive="false" ReplyPayload="MEAS?\r\n$RANDF:12.000,12.999$\r\n&gt;" ReplyIsHex="false" ResponseDelayMs="5" AppendChecksum="None" AppendTerminator="true" MemoryWriteExpression="D100=1234" />
+      <Rule RuleId="r003" Enabled="true" Name="Reset Command" Priority="30" PatternType="ExactAscii" MatchPattern="*RST" CaseSensitive="false" ReplyPayload="OK\r\n&gt;" ReplyIsHex="false" ResponseDelayMs="5" AppendChecksum="None" AppendTerminator="true" MemoryWriteExpression="" />
+      <Rule RuleId="r004" Enabled="true" Name="Fallback Command" Priority="90" PatternType="RegexAscii" MatchPattern=".*" CaseSensitive="false" ReplyPayload="OK\r\n&gt;" ReplyIsHex="false" ResponseDelayMs="5" AppendChecksum="None" AppendTerminator="true" MemoryWriteExpression="" />
+    </Rules>
+    <FaultInjection Enabled="false" Direction="TxOnly" BaseLatencyMs="30" JitterMs="15" ChunkSplitEnabled="false" ChunkSizeBytes="4" InterChunkGapMs="15" DropTrigger="EveryNPackets" DropEveryN="10" DropPercent="5" CorruptTrigger="EveryNPackets" CorruptKind="InvertLastTwoBytes" CorruptEveryN="10" CorruptPercent="5" DisconnectEveryNPackets="0" DisconnectHoldMs="500" />
+    <PeriodicEmit PeriodicEnabled="false" IntervalMs="1000" PeriodicPayload="STAT,$TIME$,$RANDF:12.00,12.50$,OK" PeriodicIsHex="false" AppendChecksum="None" AppendTerminator="true" ScenarioEnabled="false" ScenarioLoop="true">
+      <Step StepIndex="1" TriggerPattern="" DelayMs="500" Payload="BOOT READY\r\n&gt;" IsHex="false" Comment="起動完了通知" />
+      <Step StepIndex="2" TriggerPattern="MEAS?" DelayMs="100" Payload="MEAS?\r\n12.345\r\n&gt;" IsHex="false" Comment="測定要求に対する固定応答シナリオ" />
+      <Step StepIndex="3" TriggerPattern="" DelayMs="1000" Payload="EVENT,TEMP=25.4,OK\r\n&gt;" IsHex="false" Comment="定周期イベント通知" />
+    </PeriodicEmit>
+  </Channel>
+</TermEmulatorProfile>
